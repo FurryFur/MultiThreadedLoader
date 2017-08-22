@@ -2,7 +2,12 @@
 #include <Windows.h>
 #include <vector>
 #include <string>
+#include <thread>
+#include <algorithm>
+#include <functional>
 #include "resource.h"
+#include "util.h"
+#include "stamp.h"
 
 #define WINDOW_CLASS_NAME L"MultiThreaded Loader Tool"
 const unsigned int _kuiWINDOWWIDTH = 1200;
@@ -13,6 +18,7 @@ const unsigned int _kuiWINDOWHEIGHT = 1200;
 //Global Variables
 std::vector<std::wstring> g_vecImageFileNames;
 std::vector<std::wstring> g_vecSoundFileNames;
+std::vector<CStamp> g_vecStamps;
 HINSTANCE g_hInstance;
 bool g_bIsFileLoaded = false;
 
@@ -144,7 +150,8 @@ bool ChooseSoundFilesToLoad(HWND _hwnd)
 LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lparam)
 {
 	PAINTSTRUCT ps;
-	HDC _hWindowDC;
+	HDC hWindowDC;
+
 	//RECT rect;
 	switch (_uiMsg)
 	{
@@ -166,8 +173,18 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	case WM_PAINT:
 	{
 
-		_hWindowDC = BeginPaint(_hwnd, &ps);
+		hWindowDC = BeginPaint(_hwnd, &ps);
 		//Do all our painting here
+
+		//std::vector<std::thread> drawThreads;
+		for (CStamp stamp : g_vecStamps)
+		{
+			//drawThreads.emplace_back([hWindowDC, &stamp]()
+			//{
+				stamp.Draw(hWindowDC);
+			//});
+		}
+		//for_each(drawThreads.begin(), drawThreads.end(), std::mem_fn(&std::thread::join));
 
 		EndPaint(_hwnd, &ps);
 		return (0);
@@ -183,7 +200,24 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		{
 			if (ChooseImageFilesToLoad(_hwnd))
 			{
+				g_vecStamps.clear();
 
+				std::mutex mutex;
+				std::vector<std::thread> imageLoaderThreads;
+				for (int i = 0; i < g_vecImageFileNames.size(); ++i)
+				{
+					imageLoaderThreads.emplace_back([_hwnd, i, &mutex]() {
+						CStamp image{ g_hInstance, _hwnd, g_vecImageFileNames[i], i * 100, 0 };
+
+						std::lock_guard<std::mutex> lock{ mutex };
+						g_vecStamps.push_back(image);
+					});
+				}
+				std::for_each(imageLoaderThreads.begin(), imageLoaderThreads.end(), std::mem_fn(&std::thread::join));
+
+				g_vecImageFileNames.clear();
+
+				InvalidateRect(_hwnd, NULL, FALSE);
 			}
 			else
 			{
@@ -197,7 +231,18 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		{
 			if (ChooseSoundFilesToLoad(_hwnd))
 			{
-
+				std::vector<std::thread> soundThreads;
+				for (size_t i = 0; i < g_vecSoundFileNames.size(); ++i)
+				{
+					soundThreads.emplace_back( [i]() {
+						mciSendString((L"open " + g_vecSoundFileNames[i] + L" type waveaudio").c_str(), NULL, 0, 0);
+						mciSendString((L"play " + g_vecSoundFileNames[i] + L" wait").c_str(), NULL, 0, 0);
+						//mciSendString(std::wstring(L"play sound").c_str(), NULL, 0, 0);
+						mciSendString((L"close " + g_vecSoundFileNames[i]).c_str(), NULL, 0, 0);
+					} );
+				}
+				std::for_each(soundThreads.begin(), soundThreads.end(), std::mem_fn(&std::thread::join));
+				g_vecSoundFileNames.clear();
 			}
 			else
 			{

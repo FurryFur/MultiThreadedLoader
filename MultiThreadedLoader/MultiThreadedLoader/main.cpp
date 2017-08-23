@@ -9,6 +9,7 @@
 #include <memory>
 #include <iostream>
 #include <chrono>
+#include <math.h>
 #include "resource.h"
 #include "util.h"
 #include "stamp.h"
@@ -17,11 +18,11 @@
 typedef std::chrono::high_resolution_clock Clock;
 
 #define WINDOW_CLASS_NAME L"MultiThreaded Loader Tool"
-const unsigned int _kuiWINDOWWIDTH = 3000;
+const unsigned int _kuiWINDOWWIDTH = 900;
 const unsigned int _kuiWINDOWHEIGHT = 900;
 #define MAX_FILES_TO_OPEN 100
 #define MAX_CHARACTERS_IN_FILENAME 100
-const size_t g_kNumThreads = 4;
+const size_t g_kNumThreads = 8;
 
 //Global Variables
 std::vector<std::wstring> g_vecImageFileNames;
@@ -116,7 +117,7 @@ bool ChooseSoundFilesToLoad(HWND _hwnd)
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = _hwnd;
 	ofn.lpstrFile = wsFileNames;
-	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
+	ofn.nMaxFile = MAX_FILES_TO_OPEN * MAX_CHARACTERS_IN_FILENAME + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
 													   //GetSaveFileName functions return False
 													   // Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
 													   // use the contents of wsFileNames to initialize itself.
@@ -246,6 +247,11 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 					g_vecpStamps.reserve(g_vecImageFileNames.size());
 				}
 
+				// Calculate number of columns and image dimensions
+				GetClientRect(_hwnd, &rc);
+				size_t numCols = static_cast<size_t>(ceil(sqrt(g_vecImageFileNames.size())));
+				int size = (rc.right - rc.left) / numCols;
+
 				std::mutex mutex;
 
 				// TODO: Create dispatch function that encapsulates executing commands on elements in an array using a thread pool
@@ -257,10 +263,14 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 					bool lastThread = (threadIdx == (g_kNumThreads - 1)) ? true : false;
 
 					// Create thread / delegate work
-					threads.at(threadIdx) = std::thread([_hwnd, i, stride, lastThread, &mutex]() {
+					threads.at(threadIdx) = std::thread([&]() {
 						for (size_t j = i; (j < (i + stride) || lastThread) && j < g_vecImageFileNames.size(); ++j)
 						{
-							auto pImage = std::make_unique<CStamp>(g_hInstance, g_vecImageFileNames[j], j * 100, 0);
+							size_t row = j / numCols;
+							size_t col = j % numCols;
+							int startX = col * size;
+							int startY = row * size;
+							auto pImage = std::make_unique<CStamp>(g_hInstance, g_vecImageFileNames[j], startX, startY, size, size);
 
 							std::lock_guard<std::mutex> lock{ mutex };
 							g_vecpStamps.push_back(std::move(pImage));

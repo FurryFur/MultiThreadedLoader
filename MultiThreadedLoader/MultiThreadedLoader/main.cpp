@@ -247,6 +247,8 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 				}
 
 				std::mutex mutex;
+
+				// TODO: Create dispatch function that encapsulates executing commands on elements in an array using a thread pool
 				size_t stride = (g_vecImageFileNames.size() < g_kNumThreads) ? 1 : (g_vecImageFileNames.size() / g_kNumThreads);
 				for (int i = 0; i < g_vecImageFileNames.size(); i += stride)
 				{

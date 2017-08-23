@@ -146,6 +146,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="backBuffer.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stamp.h" />
     <ClInclude Include="util.h" />
@@ -154,6 +155,7 @@
     <ResourceCompile Include="MultiThreadedLoader.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="backBuffer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stamp.cpp" />
     <ClCompile Include="util.cpp" />

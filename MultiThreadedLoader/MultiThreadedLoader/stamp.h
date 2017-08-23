@@ -7,9 +7,12 @@
 class CStamp
 {
 public:
-	CStamp();
-	CStamp(HINSTANCE hInstance, HWND _hwnd, const std::wstring& _rkstrFilename, int, int );
+	CStamp(HINSTANCE hInstance, const std::wstring& _rkFilename, int, int );
 	~CStamp();
+
+	// Make non-copiable (can't shallow copy bitmap handler)
+	CStamp(const CStamp&) = delete;
+	CStamp& operator=(const CStamp&) = delete;
 
 	void Draw(HDC _hdc);
 	void SetStartX(int _iStartX);
@@ -17,7 +20,6 @@ public:
 
 private:
 	HBITMAP m_hBitMap;
-	BITMAP m_bitmapStructure;
 	int m_iWidth;
 	int m_iHeight;
 	int m_iStartX;

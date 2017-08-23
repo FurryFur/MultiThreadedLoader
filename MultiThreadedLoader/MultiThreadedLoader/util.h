@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <sstream>
 #include <mutex>
+#include <stdexcept>
 
 // Local Includes
 
@@ -20,12 +21,20 @@
 
 extern std::mutex g_mutex;
 
-template<class R, class Fn, class... Args >
-R CALLBACK SafeFn(Fn fn, Args... args)
+template<class Fn, class... Args >
+auto SafeFn(Fn fn, Args... args) -> decltype(fn(std::forward<Args>(args)...))
 {
 	std::lock_guard<std::mutex> lock(g_mutex);
 	return fn(std::forward<Args>(args)...);
 }
+
+class ResourceLoadException : public std::exception
+{
+public:
+	virtual const char* what() const noexcept override {
+		return "Error loading resource";
+	}
+};
 
 template<typename T>
 std::string ToString(const T& _value)

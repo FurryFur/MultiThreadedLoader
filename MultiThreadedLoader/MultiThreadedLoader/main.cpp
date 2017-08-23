@@ -1,24 +1,32 @@
 
 #include <Windows.h>
 #include <vector>
+#include <array>
 #include <string>
 #include <thread>
 #include <algorithm>
 #include <functional>
+#include <memory>
+#include <iostream>
+#include <chrono>
 #include "resource.h"
 #include "util.h"
 #include "stamp.h"
+#include "backBuffer.h"
+
+typedef std::chrono::high_resolution_clock Clock;
 
 #define WINDOW_CLASS_NAME L"MultiThreaded Loader Tool"
-const unsigned int _kuiWINDOWWIDTH = 1200;
-const unsigned int _kuiWINDOWHEIGHT = 1200;
-#define MAX_FILES_TO_OPEN 50
-#define MAX_CHARACTERS_IN_FILENAME 25
+const unsigned int _kuiWINDOWWIDTH = 3000;
+const unsigned int _kuiWINDOWHEIGHT = 900;
+#define MAX_FILES_TO_OPEN 100
+#define MAX_CHARACTERS_IN_FILENAME 100
+const size_t g_kNumThreads = 4;
 
 //Global Variables
 std::vector<std::wstring> g_vecImageFileNames;
 std::vector<std::wstring> g_vecSoundFileNames;
-std::vector<CStamp> g_vecStamps;
+std::vector<std::unique_ptr<CStamp>> g_vecpStamps;
 HINSTANCE g_hInstance;
 bool g_bIsFileLoaded = false;
 
@@ -38,7 +46,7 @@ bool ChooseImageFilesToLoad(HWND _hwnd)
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = _hwnd;
 	ofn.lpstrFile = wsFileNames;
-	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
+	ofn.nMaxFile = MAX_FILES_TO_OPEN * MAX_CHARACTERS_IN_FILENAME + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
 													   //GetSaveFileName functions return False
 													   // Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
 													   // use the contents of wsFileNames to initialize itself.
@@ -149,12 +157,18 @@ bool ChooseSoundFilesToLoad(HWND _hwnd)
 
 LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lparam)
 {
-	PAINTSTRUCT ps;
-	HDC hWindowDC;
+	RECT rc;
+	static CBackBuffer s_backbuffer;
+	std::array<std::thread, g_kNumThreads> threads;
 
-	//RECT rect;
 	switch (_uiMsg)
 	{
+	case WM_CREATE:
+	{
+		GetClientRect(_hwnd, &rc);
+
+		s_backbuffer.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
+	}
 	case WM_KEYDOWN:
 	{
 		switch (_wparam)
@@ -172,21 +186,45 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	break;
 	case WM_PAINT:
 	{
+		auto t1 = Clock::now();
 
-		hWindowDC = BeginPaint(_hwnd, &ps);
-		//Do all our painting here
+		// Clear background
+		s_backbuffer.Clear();
 
-		//std::vector<std::thread> drawThreads;
-		for (CStamp stamp : g_vecStamps)
+		// Create drawing threads
+		size_t stride = (g_vecpStamps.size() < g_kNumThreads) ? 1 : (g_vecpStamps.size() / g_kNumThreads);
+		for (size_t i = 0; i < g_vecpStamps.size(); i += stride)
 		{
-			//drawThreads.emplace_back([hWindowDC, &stamp]()
-			//{
-				stamp.Draw(hWindowDC);
-			//});
-		}
-		//for_each(drawThreads.begin(), drawThreads.end(), std::mem_fn(&std::thread::join));
+			// Check if this is the last thread to be dispatched
+			size_t threadIdx = i / stride;
+			bool lastThread = (threadIdx == (g_kNumThreads - 1)) ? true : false;
 
-		EndPaint(_hwnd, &ps);
+			// Create thread / delegate work
+			threads.at(threadIdx) = std::thread{ [i, stride, lastThread]()
+			{
+				for (size_t j = i; (j < (i + stride) || lastThread) && j < g_vecpStamps.size(); ++j)
+				{
+					g_vecpStamps[j]->Draw(s_backbuffer.GetBFDC());
+				}
+			} };
+
+			// Exit loop if last thread has been dispatched
+			if (lastThread)
+			{
+				break;
+			}
+		}
+
+		// Wait for draw threads to complete
+		for_each(threads.begin(), threads.end(), [](std::thread& thread) { if (thread.joinable()) thread.join(); });
+
+		// Draw to window
+		s_backbuffer.Present();
+
+		auto t2 = Clock::now();
+		auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+		OutputDebugString((L"Image Draw Time: " + ToWString(dt) + L"ms\n").c_str());
+		
 		return (0);
 	}
 	break;
@@ -200,24 +238,48 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		{
 			if (ChooseImageFilesToLoad(_hwnd))
 			{
-				g_vecStamps.clear();
+				auto t1 = Clock::now();
+
+				g_vecpStamps.clear();
+				if (g_vecpStamps.capacity() < g_vecImageFileNames.size())
+				{
+					g_vecpStamps.reserve(g_vecImageFileNames.size());
+				}
 
 				std::mutex mutex;
-				std::vector<std::thread> imageLoaderThreads;
-				for (int i = 0; i < g_vecImageFileNames.size(); ++i)
+				size_t stride = (g_vecImageFileNames.size() < g_kNumThreads) ? 1 : (g_vecImageFileNames.size() / g_kNumThreads);
+				for (int i = 0; i < g_vecImageFileNames.size(); i += stride)
 				{
-					imageLoaderThreads.emplace_back([_hwnd, i, &mutex]() {
-						CStamp image{ g_hInstance, _hwnd, g_vecImageFileNames[i], i * 100, 0 };
+					// Check if this is the last thread to be dispatched
+					size_t threadIdx = i / stride;
+					bool lastThread = (threadIdx == (g_kNumThreads - 1)) ? true : false;
 
-						std::lock_guard<std::mutex> lock{ mutex };
-						g_vecStamps.push_back(image);
+					// Create thread / delegate work
+					threads.at(threadIdx) = std::thread([_hwnd, i, stride, lastThread, &mutex]() {
+						for (size_t j = i; (j < (i + stride) || lastThread) && j < g_vecImageFileNames.size(); ++j)
+						{
+							auto pImage = std::make_unique<CStamp>(g_hInstance, g_vecImageFileNames[j], j * 100, 0);
+
+							std::lock_guard<std::mutex> lock{ mutex };
+							g_vecpStamps.push_back(std::move(pImage));
+						}
 					});
+					
+					// Exit loop if last thread has been dispatched
+					if (lastThread)
+					{
+						break;
+					}
 				}
-				std::for_each(imageLoaderThreads.begin(), imageLoaderThreads.end(), std::mem_fn(&std::thread::join));
+				for_each(threads.begin(), threads.end(), [](std::thread& thread) { if (thread.joinable()) thread.join(); });
 
 				g_vecImageFileNames.clear();
 
 				InvalidateRect(_hwnd, NULL, FALSE);
+
+				auto t2 = Clock::now();
+				auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+				OutputDebugString((L"Image Load Time: " + ToWString(dt) + L"ms\n").c_str());
 			}
 			else
 			{
@@ -237,7 +299,6 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 					soundThreads.emplace_back( [i]() {
 						mciSendString((L"open " + g_vecSoundFileNames[i] + L" type waveaudio").c_str(), NULL, 0, 0);
 						mciSendString((L"play " + g_vecSoundFileNames[i] + L" wait").c_str(), NULL, 0, 0);
-						//mciSendString(std::wstring(L"play sound").c_str(), NULL, 0, 0);
 						mciSendString((L"close " + g_vecSoundFileNames[i]).c_str(), NULL, 0, 0);
 					} );
 				}

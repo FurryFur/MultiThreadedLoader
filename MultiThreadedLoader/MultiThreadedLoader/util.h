@@ -8,6 +8,7 @@
 #include <sstream>
 #include <mutex>
 #include <stdexcept>
+#include <functional>
 
 // Local Includes
 
@@ -26,6 +27,31 @@ auto SafeFn(Fn fn, Args... args) -> decltype(fn(std::forward<Args>(args)...))
 {
 	std::lock_guard<std::mutex> lock(g_mutex);
 	return fn(std::forward<Args>(args)...);
+}
+
+template<typename T, typename Container>
+void ForEachThreaded(Container container, size_t numThreads, std::function<void(size_t idx, T element)> fn)
+{
+	std::vector<std::thread> threads;
+	threads.reserve(numThreads);
+	
+	for (int threadIdx = 0; threadIdx < numThreads; ++threadIdx)
+	{
+		// Check if this is the last thread to be dispatched
+		bool lastThread = (threadIdx == (numThreads - 1)) ? true : false;
+
+		// Create thread / delegate work
+		threads.emplace_back([&]() {
+			size_t stride = (container.size() < numThreads) ? 1 : (container.size() / numThreads);
+			size_t startIdx = threadIdx * stride;
+			size_t endIdx = lastThread ? container.size() : startIdx + stride;
+			for (size_t i = startIdx; i < endIdx; ++i)
+			{
+				fn(i, container.at(i));
+			}
+		});
+	}
+	for_each(threads.begin(), threads.end(), [](std::thread& thread) { if (thread.joinable()) thread.join(); });
 }
 
 class ResourceLoadException : public std::exception

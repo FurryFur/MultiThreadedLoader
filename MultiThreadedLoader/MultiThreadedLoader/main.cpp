@@ -160,6 +160,7 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 {
 	RECT rc;
 	static CBackBuffer s_backbuffer;
+	static std::array<CBackBuffer, g_kNumThreads> s_threadBackbuffers;
 
 	switch (_uiMsg)
 	{
@@ -168,6 +169,10 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		GetClientRect(_hwnd, &rc);
 
 		s_backbuffer.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
+		for (CBackBuffer& rBackbuffer : s_threadBackbuffers)
+		{
+			rBackbuffer.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
+		}
 	}
 	case WM_KEYDOWN:
 	{
@@ -191,13 +196,37 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		// Clear background
 		s_backbuffer.Clear();
 
-		// Create drawing threads
-		DistributeWork(g_vecpStamps, g_kNumThreads, [](size_t _, size_t threadIdx, std::unique_ptr<CStamp>& pStamp) {
-			pStamp->Draw(s_backbuffer.GetBFDC());
+		DistributeWork(s_threadBackbuffers, g_kNumThreads, [](CBackBuffer& rBb) {
+			rBb.Clear();
 		});
 
+		// Create drawing threads
+		DistributeWork(g_vecpStamps, g_kNumThreads, [](size_t _, size_t threadIdx, std::unique_ptr<CStamp>& pStamp) {
+			pStamp->Draw(s_threadBackbuffers.at(threadIdx).GetBFDC());
+		});
+
+		const size_t minStride = 2;
+		size_t startStride = s_threadBackbuffers.size() / g_kNumThreads;
+		startStride = (startStride < minStride) ? minStride : startStride;
+		size_t skipAmount = 1;
+		while (skipAmount < s_threadBackbuffers.size())
+		{
+			DistributeWork(s_threadBackbuffers, g_kNumThreads, [skipAmount](size_t i, size_t threadIdx, size_t stride, CBackBuffer& rBbSrc) {
+				// Skip first backbuffer in work chunk
+				if (i == threadIdx * stride * skipAmount)
+					return;
+
+				CBackBuffer& bbDst = s_threadBackbuffers.at(threadIdx * stride * skipAmount);
+				int width = bbDst.GetWidth();
+				int height = bbDst.GetHeight();
+				BitBlt(bbDst.GetBFDC(), 0, 0, width, height, rBbSrc.GetBFDC(), 0, 0, SRCCOPY);
+			}, minStride, skipAmount);
+
+			skipAmount *= startStride;
+		}
+
 		// Draw to window
-		s_backbuffer.Present();
+		s_threadBackbuffers.at(0).Present();
 
 		auto t2 = Clock::now();
 		auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
@@ -232,7 +261,7 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 
 				// Load images, distribute work across threads
 				std::mutex mutex;
-				DistributeWork(g_vecImageFileNames, g_kNumThreads, [numCols, size, &mutex](size_t i, size_t _, const std::wstring& filename) {
+				DistributeWork(g_vecImageFileNames, g_kNumThreads, [numCols, size, &mutex](size_t i, const std::wstring& filename) {
 					size_t row = i / numCols;
 					size_t col = i % numCols;
 					int startX = col * size;

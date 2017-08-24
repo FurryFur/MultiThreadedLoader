@@ -29,29 +29,40 @@ auto SafeFn(Fn fn, Args... args) -> decltype(fn(std::forward<Args>(args)...))
 	return fn(std::forward<Args>(args)...);
 }
 
-template<typename T, typename Container>
-void ForEachThreaded(Container container, size_t numThreads, std::function<void(size_t idx, T element)> fn)
+template<typename Container>
+void DistributeWork(Container& container, size_t numThreads, std::function<void(size_t elementIdx, size_t threadIdx, decltype(container.at(0)) element)> fn)
 {
+	// Do nothing if container contains zero elements
+	if (container.size() == 0)
+		return;
+
+	// Avoid creating extra threads
+	numThreads = (numThreads < container.size()) ? numThreads : container.size();
+
+	// Allocate memory for threads
 	std::vector<std::thread> threads;
 	threads.reserve(numThreads);
 	
-	for (int threadIdx = 0; threadIdx < numThreads; ++threadIdx)
+	// Create worker threads
+	for (size_t threadIdx = 0; threadIdx < numThreads; ++threadIdx)
 	{
-		// Check if this is the last thread to be dispatched
-		bool lastThread = (threadIdx == (numThreads - 1)) ? true : false;
+		threads.emplace_back([&container, numThreads, fn, threadIdx]() {
+			// Check if this is the last thread
+			bool lastThread = (threadIdx == (numThreads - 1)) ? true : false;
 
-		// Create thread / delegate work
-		threads.emplace_back([&]() {
+			// Divide up work
 			size_t stride = (container.size() < numThreads) ? 1 : (container.size() / numThreads);
 			size_t startIdx = threadIdx * stride;
 			size_t endIdx = lastThread ? container.size() : startIdx + stride;
 			for (size_t i = startIdx; i < endIdx; ++i)
 			{
-				fn(i, container.at(i));
+				fn(i, threadIdx, container.at(i));
 			}
 		});
 	}
-	for_each(threads.begin(), threads.end(), [](std::thread& thread) { if (thread.joinable()) thread.join(); });
+
+	// Wait for all threads to complete
+	for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
 }
 
 class ResourceLoadException : public std::exception

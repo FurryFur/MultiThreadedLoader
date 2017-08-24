@@ -160,7 +160,6 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 {
 	RECT rc;
 	static CBackBuffer s_backbuffer;
-	std::array<std::thread, g_kNumThreads> threads;
 
 	switch (_uiMsg)
 	{
@@ -193,31 +192,9 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		s_backbuffer.Clear();
 
 		// Create drawing threads
-		size_t stride = (g_vecpStamps.size() < g_kNumThreads) ? 1 : (g_vecpStamps.size() / g_kNumThreads);
-		for (size_t i = 0; i < g_vecpStamps.size(); i += stride)
-		{
-			// Check if this is the last thread to be dispatched
-			size_t threadIdx = i / stride;
-			bool lastThread = (threadIdx == (g_kNumThreads - 1)) ? true : false;
-
-			// Create thread / delegate work
-			threads.at(threadIdx) = std::thread{ [i, stride, lastThread]()
-			{
-				for (size_t j = i; (j < (i + stride) || lastThread) && j < g_vecpStamps.size(); ++j)
-				{
-					g_vecpStamps[j]->Draw(s_backbuffer.GetBFDC());
-				}
-			} };
-
-			// Exit loop if last thread has been dispatched
-			if (lastThread)
-			{
-				break;
-			}
-		}
-
-		// Wait for draw threads to complete
-		for_each(threads.begin(), threads.end(), [](std::thread& thread) { if (thread.joinable()) thread.join(); });
+		DistributeWork(g_vecpStamps, g_kNumThreads, [](size_t _, size_t threadIdx, std::unique_ptr<CStamp>& pStamp) {
+			pStamp->Draw(s_backbuffer.GetBFDC());
+		});
 
 		// Draw to window
 		s_backbuffer.Present();
@@ -241,6 +218,7 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 			{
 				auto t1 = Clock::now();
 
+				// Clear existing images
 				g_vecpStamps.clear();
 				if (g_vecpStamps.capacity() < g_vecImageFileNames.size())
 				{
@@ -252,39 +230,20 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 				size_t numCols = static_cast<size_t>(ceil(sqrt(g_vecImageFileNames.size())));
 				int size = (rc.right - rc.left) / numCols;
 
+				// Load images, distribute work across threads
 				std::mutex mutex;
+				DistributeWork(g_vecImageFileNames, g_kNumThreads, [numCols, size, &mutex](size_t i, size_t _, const std::wstring& filename) {
+					size_t row = i / numCols;
+					size_t col = i % numCols;
+					int startX = col * size;
+					int startY = row * size;
+					auto pImage = std::make_unique<CStamp>(g_hInstance, filename, startX, startY, size, size);
 
-				// TODO: Create dispatch function that encapsulates executing commands on elements in an array using a thread pool
-				size_t stride = (g_vecImageFileNames.size() < g_kNumThreads) ? 1 : (g_vecImageFileNames.size() / g_kNumThreads);
-				for (int i = 0; i < g_vecImageFileNames.size(); i += stride)
-				{
-					// Check if this is the last thread to be dispatched
-					size_t threadIdx = i / stride;
-					bool lastThread = (threadIdx == (g_kNumThreads - 1)) ? true : false;
+					std::lock_guard<std::mutex> lock{ mutex };
+					g_vecpStamps.push_back(std::move(pImage));
+				});
 
-					// Create thread / delegate work
-					threads.at(threadIdx) = std::thread([&]() {
-						for (size_t j = i; (j < (i + stride) || lastThread) && j < g_vecImageFileNames.size(); ++j)
-						{
-							size_t row = j / numCols;
-							size_t col = j % numCols;
-							int startX = col * size;
-							int startY = row * size;
-							auto pImage = std::make_unique<CStamp>(g_hInstance, g_vecImageFileNames[j], startX, startY, size, size);
-
-							std::lock_guard<std::mutex> lock{ mutex };
-							g_vecpStamps.push_back(std::move(pImage));
-						}
-					});
-					
-					// Exit loop if last thread has been dispatched
-					if (lastThread)
-					{
-						break;
-					}
-				}
-				for_each(threads.begin(), threads.end(), [](std::thread& thread) { if (thread.joinable()) thread.join(); });
-
+				// Clear vector of files to load
 				g_vecImageFileNames.clear();
 
 				InvalidateRect(_hwnd, NULL, FALSE);

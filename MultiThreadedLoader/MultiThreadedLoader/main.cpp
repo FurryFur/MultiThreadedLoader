@@ -169,7 +169,6 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	{
 		GetClientRect(_hwnd, &rc);
 
-		s_backbuffer.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
 		for (CBackBuffer& bb : s_backbuffers)
 		{
 			bb.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);

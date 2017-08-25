@@ -169,7 +169,6 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	{
 		GetClientRect(_hwnd, &rc);
 
-		s_backbuffer.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
 		for (CBackBuffer& bb : s_backbuffers)
 		{
 			bb.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
@@ -206,9 +205,21 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 
 		// Combine backbuffers
 		GetClientRect(_hwnd, &rc);
-		for (size_t i = 1; i < s_backbuffers.size(); ++i)
+		std::vector<CBackBuffer*> reduced;
+		size_t skipAmount = 2;
+		while (skipAmount <= s_backbuffers.size())
 		{
-			BitBlt(s_backbuffers.at(0).GetBFDC(), 0, 0, rc.right - rc.left, rc.bottom - rc.top, s_backbuffers.at(i).GetBFDC(), 0, 0, SRCAND);
+			for (size_t i = skipAmount / 2; i < s_backbuffers.size(); i += skipAmount)
+			{
+				reduced.push_back(&s_backbuffers.at(i));
+			}
+
+			DistributeWork(reduced, g_kNumThreads, [&rc, skipAmount](size_t i, CBackBuffer* pBb) {
+				BitBlt(s_backbuffers.at(i * skipAmount).GetBFDC(), 0, 0, rc.right - rc.left, rc.bottom - rc.top, pBb->GetBFDC(), 0, 0, SRCAND);
+			});
+
+			skipAmount *= 2;
+			reduced.clear();
 		}
 
 		// Draw to window

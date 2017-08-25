@@ -61,11 +61,6 @@ int CBackBuffer::GetWidth() const
 	return m_iWidth;
 }
 
-HBITMAP CBackBuffer::GetHBitmap() const
-{
-	return m_hBFBitmap;
-}
-
 void CBackBuffer::Clear()
 {
 	RECT rect;

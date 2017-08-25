@@ -1,3 +1,17 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// File Name	: stamp.cpp
+// Description	: Implementation file for CStamp class
+// Author		: Lance Chaney
+// Mail			: lance.cha7337@mediadesign.school.nz
+//
+
 #include "stamp.h"
 #include "resource.h"
 #include "util.h"

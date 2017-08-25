@@ -1,3 +1,17 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// File Name	: stamp.h
+// Description	: Header file for CStamp class
+// Author		: Lance Chaney
+// Mail			: lance.cha7337@mediadesign.school.nz
+//
+
 #ifndef __STAMP_H__
 #define __STAMP_H__
 
@@ -14,10 +28,19 @@ public:
 	CStamp(const CStamp&) = delete;
 	CStamp& operator=(const CStamp&) = delete;
 
+	// Draws this stamp
 	void Draw(HDC _hdc);
+
+	// Sets the x position of the left hand side of the stamp
 	void SetStartX(int _iStartX);
+
+	// Sets the y position of the top side of the stamp
 	void SetStartY(int _iStartY);
+
+	// Sets the width of the stamp
 	void SetWidth(int _iWidth);
+
+	// Sets the height of the stamp
 	void SetHeight(int _iHeight);
 
 private:

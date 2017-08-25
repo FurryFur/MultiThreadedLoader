@@ -1,4 +1,22 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// File Name	: backbuffer.h
+// Description	: Header file for CBackBuffer class
+// Author		: Lance Chaney
+// Mail			: lance.cha7337@mediadesign.school.nz
+//
+
 #pragma once
+
+#ifndef BACKBUFFER_H
+#define BACKBUFFER_H
+
 //Library Includes
 #include <Windows.h>
 
@@ -10,15 +28,22 @@ public:
 	CBackBuffer(const CBackBuffer&) = delete;
 	CBackBuffer& operator = (const CBackBuffer&) = delete;
 
+	// Initialize the backbuffer to the specified width and height
 	bool Initialise(HWND _hWnd, int _iWidth, int _iHeight);
 
+	// Gets the handle to the in memory device context associated with this backbuffer
 	HDC GetBFDC() const;
 
+	// Returns the height of the backbuffer in pixels
 	int GetHeight() const;
-	int GetWidth() const;
-	HBITMAP GetHBitmap() const;
 
+	// Returns the width of the backbuffer in pixels
+	int GetWidth() const;
+
+	// Clears the backbuffer
 	void Clear();
+
+	// Presents the backbuffer to the display window
 	void Present();
 
 private:
@@ -30,4 +55,4 @@ private:
 	int m_iHeight;
 };
 
-
+#endif // BACKBUFFER_H

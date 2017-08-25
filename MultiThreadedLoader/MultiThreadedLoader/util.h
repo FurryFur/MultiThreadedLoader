@@ -36,6 +36,7 @@
 
 extern std::mutex g_mutex;
 
+// Wraps function call with a global lock
 template<class Fn, class... Args >
 auto SafeFn(Fn fn, Args... args) -> decltype(fn(std::forward<Args>(args)...))
 {
@@ -43,6 +44,9 @@ auto SafeFn(Fn fn, Args... args) -> decltype(fn(std::forward<Args>(args)...))
 	return fn(std::forward<Args>(args)...);
 }
 
+// Distributes work to the specified number of threads
+// The supplied function is run on every element in the specified container.
+// Function execution is spread across mutliple threads.
 template<typename Container>
 void DistributeWork(Container& container, size_t numThreads, std::function<void(size_t elementIdx, size_t threadIdx, decltype(container.at(0)) element)> fn)
 {
@@ -79,6 +83,9 @@ void DistributeWork(Container& container, size_t numThreads, std::function<void(
 	for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
 }
 
+// Distributes work to the specified number of threads
+// The supplied function is run on every element in the specified container.
+// Function execution is spread across mutliple threads.
 template<typename Container>
 void DistributeWork(Container& container, size_t numThreads, std::function<void(size_t elementIdx, decltype(container.at(0)) element)> fn)
 {
@@ -87,6 +94,9 @@ void DistributeWork(Container& container, size_t numThreads, std::function<void(
 	});
 }
 
+// Distributes work to the specified number of threads
+// The supplied function is run on every element in the specified container.
+// Function execution is spread across mutliple threads.
 template<typename Container>
 void DistributeWork(Container& container, size_t numThreads, std::function<void(decltype(container.at(0)) element)> fn)
 {
@@ -95,6 +105,7 @@ void DistributeWork(Container& container, size_t numThreads, std::function<void(
 	});
 }
 
+// An exception that should be thrown when a resource fails to load
 class ResourceLoadException : public std::exception
 {
 public:
@@ -103,6 +114,7 @@ public:
 	}
 };
 
+// Convert the supplied object to a string
 template<typename T>
 std::string ToString(const T& _value)
 {
@@ -111,6 +123,7 @@ std::string ToString(const T& _value)
 	return (theStream.str());
 }
 
+// Convert the supplied object to a wstring
 template<typename T>
 std::wstring ToWString(const T& _value)
 {

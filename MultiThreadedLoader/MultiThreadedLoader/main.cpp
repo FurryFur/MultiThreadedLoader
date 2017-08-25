@@ -1,5 +1,16 @@
-
-
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// File Name	: main.cpp
+// Description	: Entry point for program
+// Author		: Lance Chaney
+// Mail			: lance.cha7337@mediadesign.school.nz
+//
 
 #include <Windows.h>
 #include <vector>

@@ -345,7 +345,7 @@ HWND CreateAndRegisterWindow(HINSTANCE _hInstance)
 	winclass.hIcon = LoadIcon(NULL, IDI_APPLICATION);
 	winclass.hCursor = LoadCursor(NULL, IDC_ARROW);
 	winclass.hbrBackground =
-		static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH));
+		static_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
 	winclass.lpszMenuName = NULL;
 	winclass.lpszClassName = WINDOW_CLASS_NAME;
 	winclass.hIconSm = LoadIcon(NULL, IDI_APPLICATION);

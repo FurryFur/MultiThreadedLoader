@@ -110,7 +110,6 @@ bool ChooseSoundFilesToLoad(HWND _hwnd)
 	wchar_t wsFileNames[MAX_FILES_TO_OPEN * MAX_CHARACTERS_IN_FILENAME + MAX_PATH]; //The string to store all the filenames selected in one buffer togther with the complete path name.
 	wchar_t _wsPathName[MAX_PATH + 1];
 	wchar_t _wstempFile[MAX_PATH + MAX_CHARACTERS_IN_FILENAME]; //Assuming that the filename is not more than 20 characters
-	wchar_t _wsFileToOpen[MAX_PATH + MAX_CHARACTERS_IN_FILENAME];
 	ZeroMemory(wsFileNames, sizeof(wsFileNames));
 	ZeroMemory(_wsPathName, sizeof(_wsPathName));
 	ZeroMemory(_wstempFile, sizeof(_wstempFile));
@@ -242,15 +241,15 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 				// Calculate number of columns and image dimensions
 				GetClientRect(_hwnd, &rc);
 				size_t numCols = static_cast<size_t>(ceil(sqrt(g_vecImageFileNames.size())));
-				int size = (rc.right - rc.left) / numCols;
+				int size = static_cast<int>((rc.right - rc.left)) / static_cast<int>(numCols);
 
 				// Load images, distribute work across threads
 				std::mutex mutex;
 				DistributeWork(g_vecImageFileNames, g_kNumThreads, [numCols, size, &mutex](size_t i, size_t _, const std::wstring& filename) {
 					size_t row = i / numCols;
 					size_t col = i % numCols;
-					int startX = col * size;
-					int startY = row * size;
+					int startX = static_cast<int>(col) * size;
+					int startY = static_cast<int>(row) * size;
 					auto pImage = std::make_unique<CStamp>(g_hInstance, filename, startX, startY, size, size);
 
 					std::lock_guard<std::mutex> lock{ mutex };

@@ -1,3 +1,17 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// File Name	: util.h
+// Description	: Header file for utility functions and variables
+// Author		: Lance Chaney
+// Mail			: lance.cha7337@mediadesign.school.nz
+//
+
 #pragma once
 
 #if !defined(__UTILS_H__)
@@ -63,6 +77,22 @@ void DistributeWork(Container& container, size_t numThreads, std::function<void(
 
 	// Wait for all threads to complete
 	for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
+}
+
+template<typename Container>
+void DistributeWork(Container& container, size_t numThreads, std::function<void(size_t elementIdx, decltype(container.at(0)) element)> fn)
+{
+	DistributeWork(container, numThreads, [&container, fn](size_t i, size_t threadIdx, decltype(container.at(0)) element) {
+		fn(i, container.at(i));
+	});
+}
+
+template<typename Container>
+void DistributeWork(Container& container, size_t numThreads, std::function<void(decltype(container.at(0)) element)> fn)
+{
+	DistributeWork(container, numThreads, [&container, fn](size_t i, size_t threadIdx, decltype(container.at(0)) element) {
+		fn(container.at(i));
+	});
 }
 
 class ResourceLoadException : public std::exception

@@ -1,4 +1,6 @@
 
+
+
 #include <Windows.h>
 #include <vector>
 #include <array>
@@ -159,7 +161,7 @@ bool ChooseSoundFilesToLoad(HWND _hwnd)
 LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lparam)
 {
 	RECT rc;
-	static CBackBuffer s_backbuffer;
+	static std::array<CBackBuffer, g_kNumThreads> s_backbuffers;
 
 	switch (_uiMsg)
 	{
@@ -168,6 +170,10 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		GetClientRect(_hwnd, &rc);
 
 		s_backbuffer.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
+		for (CBackBuffer& bb : s_backbuffers)
+		{
+			bb.Initialise(_hwnd, rc.right - rc.left, rc.bottom - rc.top);
+		}
 	}
 	case WM_KEYDOWN:
 	{
@@ -189,15 +195,24 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		auto t1 = Clock::now();
 
 		// Clear background
-		s_backbuffer.Clear();
+		DistributeWork(s_backbuffers, g_kNumThreads, [](CBackBuffer& bb) {
+			bb.Clear();
+		});
 
 		// Create drawing threads
 		DistributeWork(g_vecpStamps, g_kNumThreads, [](size_t _, size_t threadIdx, std::unique_ptr<CStamp>& pStamp) {
-			pStamp->Draw(s_backbuffer.GetBFDC());
+			pStamp->Draw(s_backbuffers[threadIdx].GetBFDC());
 		});
 
+		// Combine backbuffers
+		GetClientRect(_hwnd, &rc);
+		for (size_t i = 1; i < s_backbuffers.size(); ++i)
+		{
+			BitBlt(s_backbuffers.at(0).GetBFDC(), 0, 0, rc.right - rc.left, rc.bottom - rc.top, s_backbuffers.at(i).GetBFDC(), 0, 0, SRCAND);
+		}
+
 		// Draw to window
-		s_backbuffer.Present();
+		s_backbuffers.at(0).Present();
 
 		auto t2 = Clock::now();
 		auto dt = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();

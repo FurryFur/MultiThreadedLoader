@@ -38,17 +38,13 @@ void CStamp::Draw(HDC _hdc)
 	GetObject(m_hBitMap, sizeof(BITMAP), &bitmap);
 
 	// Create device context to load bitmap into
-	std::unique_lock<std::mutex> lock(g_mutex);
 	HDC hdcBitmap = CreateCompatibleDC(_hdc);
-	lock.unlock();
 
 	// Select bitmap into device context
 	HBITMAP hOldBitmap = static_cast<HBITMAP>(SelectObject(hdcBitmap, m_hBitMap));
 
 	// Bit blip bitmap device context to main device context
-	lock.lock();
 	StretchBlt(_hdc, m_iStartX, m_iStartY, m_iWidth, m_iHeight, hdcBitmap, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY);
-	lock.unlock();
 
 	// Cleanup
 	static_cast<HBITMAP>(SelectObject(hdcBitmap, hOldBitmap));

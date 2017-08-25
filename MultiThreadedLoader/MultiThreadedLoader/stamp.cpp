@@ -44,6 +44,7 @@ void CStamp::Draw(HDC _hdc)
 	HBITMAP hOldBitmap = static_cast<HBITMAP>(SelectObject(hdcBitmap, m_hBitMap));
 
 	// Bit blip bitmap device context to main device context
+	SetStretchBltMode(_hdc, HALFTONE);
 	StretchBlt(_hdc, m_iStartX, m_iStartY, m_iWidth, m_iHeight, hdcBitmap, 0, 0, bitmap.bmWidth, bitmap.bmHeight, SRCCOPY);
 
 	// Cleanup
